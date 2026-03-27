@@ -1,45 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Pro Trading Dashboard</title>
+<title>Pro Trading Dashboard MAX</title>
 
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
 <style>
 body { background:#020617; color:white; font-family:sans-serif; }
 
-.top {
-    padding:10px;
-    display:flex;
-    gap:10px;
-    position:relative;
-}
+.top { padding:10px; display:flex; gap:10px; }
 
-#dropdown {
-    position:absolute;
-    top:40px;
-    width:250px;
-    background:#111827;
-    border-radius:8px;
-    max-height:200px;
-    overflow-y:auto;
-    z-index:1000;
-}
-
-.dropdown-item {
+input, button {
     padding:8px;
-    cursor:pointer;
+    background:#111827;
+    color:white;
+    border:none;
+    border-radius:5px;
 }
 
-.dropdown-item:hover {
-    background:#1f2937;
+.grid {
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
 }
 
-.container { display:flex; }
-
-.chart { flex:3; height:600px; }
-
-.side { flex:1; padding:10px; }
+.chart { height:400px; }
 
 .card {
     background:#111827;
@@ -55,200 +40,148 @@ body { background:#020617; color:white; font-family:sans-serif; }
 
 <body>
 
-<h2>📊 Pro Trading Dashboard</h2>
+<h2>🚀 Pro Trading Dashboard MAX</h2>
 
 <div class="top">
-    <input id="symbol" placeholder="Search stock..." onkeyup="searchStock()">
+    <input id="symbol" placeholder="Search (AAPL / RELIANCE.NS)">
+    <button onclick="setTF('5')">5m</button>
+    <button onclick="setTF('15')">15m</button>
+    <button onclick="setTF('60')">1H</button>
+    <button onclick="setTF('240')">4H</button>
+    <button onclick="setTF('D')">1D</button>
     <button onclick="load()">Load</button>
-    <div id="dropdown"></div>
 </div>
 
-<div class="container">
-    <div id="chart" class="chart"></div>
+<div class="grid">
+    <div id="chart1" class="chart"></div>
+    <div id="chart2" class="chart"></div>
+</div>
 
-    <div class="side">
-        <div class="card">
-            <h3>Signal</h3>
-            <p id="signal"></p>
-            <p id="entry"></p>
-            <p id="sl"></p>
-            <p id="tp"></p>
-        </div>
-    </div>
+<div class="card">
+    <h3>Signal</h3>
+    <p id="signal"></p>
+    <p id="entry"></p>
+    <p id="sl"></p>
+    <p id="tp"></p>
 </div>
 
 <script>
 
-// ==============================
-// 🔹 CHART SETUP
-// ==============================
-let chart = LightweightCharts.createChart(document.getElementById('chart'), {
-    layout: { background: { color: '#020617' }, textColor: '#DDD' },
-    grid: { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } }
-});
+let API_KEY = "YOUR_FINNHUB_KEY";
 
-let candleSeries = chart.addCandlestickSeries();
+let chart1 = LightweightCharts.createChart(document.getElementById('chart1'));
+let chart2 = LightweightCharts.createChart(document.getElementById('chart2'));
 
-// ==============================
-// 🔹 STOCK LIST
-// ==============================
-const stocks = [
-    { name: "NIFTY 50", symbol: "NSE:NIFTY" },
-    { name: "BANK NIFTY", symbol: "NSE:BANKNIFTY" },
-    { name: "Reliance", symbol: "NSE:RELIANCE" },
-    { name: "TCS", symbol: "NSE:TCS" },
-    { name: "Infosys", symbol: "NSE:INFY" },
+let c1 = chart1.addCandlestickSeries();
+let c2 = chart2.addCandlestickSeries();
 
-    { name: "Apple", symbol: "AAPL" },
-    { name: "Tesla", symbol: "TSLA" },
-    { name: "Microsoft", symbol: "MSFT" }
-];
+let currentTF = "15";
+let socket, autoSignalInterval;
 
-// ==============================
-// 🔹 SEARCH
-// ==============================
-function searchStock() {
-    let input = document.getElementById("symbol").value.toLowerCase();
-    let dropdown = document.getElementById("dropdown");
-
-    dropdown.innerHTML = "";
-
-    if (!input) return;
-
-    let results = stocks.filter(s =>
-        s.name.toLowerCase().includes(input) ||
-        s.symbol.toLowerCase().includes(input)
-    );
-
-    results.forEach(stock => {
-        let div = document.createElement("div");
-        div.className = "dropdown-item";
-        div.innerText = stock.name + " (" + stock.symbol + ")";
-
-        div.onclick = () => {
-            document.getElementById("symbol").value = stock.symbol;
-            dropdown.innerHTML = "";
-        };
-
-        dropdown.appendChild(div);
-    });
+function setTF(tf){
+    currentTF = tf;
+    load();
 }
 
-// ==============================
-// 🔹 SYMBOL FORMAT
-// ==============================
-function formatSymbol(input) {
-    input = input.toUpperCase().trim();
+// =======================
+// LOAD DATA
+// =======================
+async function load(){
 
-    if (input.includes(":")) return input;
+    let symbol = document.getElementById("symbol").value;
 
-    if (input === "NIFTY") return "NSE:NIFTY";
-    if (input === "BANKNIFTY") return "NSE:BANKNIFTY";
+    let res = await fetch(`http://localhost:5000/candles/${symbol}?tf=${currentTF}`);
+    let data = await res.json();
 
-    const indianStocks = ["RELIANCE","TCS","INFY"];
+    let formatted = data.t.map((time,i)=>({
+        time: time,
+        open: data.o[i],
+        high: data.h[i],
+        low: data.l[i],
+        close: data.c[i]
+    }));
 
-    if (indianStocks.includes(input)) {
-        return "NSE:" + input;
-    }
+    c1.setData(formatted);
+    c2.setData(formatted);
 
-    return input;
+    startLive(symbol);
+    startAutoSignal(symbol);
 }
 
-// ==============================
-// 🔹 LOAD DATA
-// ==============================
-async function load() {
+// =======================
+// LIVE STREAM
+// =======================
+function startLive(symbol){
 
-    let raw = document.getElementById("symbol").value;
-    let symbol = formatSymbol(raw);
+    if(socket) socket.close();
 
-    if (!symbol) return;
+    socket = new WebSocket(`wss://ws.finnhub.io?token=${API_KEY}`);
 
-    console.log("Loading:", symbol);
+    socket.onopen = () => {
+        socket.send(JSON.stringify({ type:'subscribe', symbol }));
+    };
 
-    document.getElementById("signal").innerText = "Loading...";
+    let currentCandle=null;
 
-    try {
+    socket.onmessage = (event)=>{
+        let msg = JSON.parse(event.data);
 
-        // 🔹 Fetch candles
-        let candleRes = await fetch("http://localhost:5000/candles/" + symbol);
-        let candleData = await candleRes.json();
+        if(msg.type==="trade"){
+            let price = msg.data[0].p;
+            let time = Math.floor(msg.data[0].t/1000);
 
-        console.log("Candles:", candleData);
+            let candleTime = Math.floor(time/60)*60;
 
-        if (!candleData || !candleData.c) {
-            alert("❌ No candle data (try AAPL)");
-            return;
+            if(!currentCandle || currentCandle.time!==candleTime){
+                currentCandle = {
+                    time:candleTime,
+                    open:price,
+                    high:price,
+                    low:price,
+                    close:price
+                };
+            }else{
+                currentCandle.high = Math.max(currentCandle.high,price);
+                currentCandle.low = Math.min(currentCandle.low,price);
+                currentCandle.close = price;
+            }
+
+            c1.update(currentCandle);
+            c2.update(currentCandle);
         }
+    };
+}
 
-        // 🔥 FIX TIME FORMAT (VERY IMPORTANT)
-        let formatted = candleData.t.map((time, i) => ({
-            time: Math.floor(time), // ensure correct format
-            open: candleData.o[i],
-            high: candleData.h[i],
-            low: candleData.l[i],
-            close: candleData.c[i]
-        }));
+// =======================
+// AUTO SIGNAL
+// =======================
+function startAutoSignal(symbol){
 
-        // 🔥 CLEAR OLD DATA
-        chart.removeSeries(candleSeries);
-        candleSeries = chart.addCandlestickSeries();
+    if(autoSignalInterval) clearInterval(autoSignalInterval);
 
-        candleSeries.setData(formatted);
+    autoSignalInterval = setInterval(async ()=>{
 
-        // 🔹 Draw FVG
-        drawFVG(candleData);
-
-        // 🔹 Fetch signal
-        let res = await fetch("http://localhost:5000/prosignal/" + symbol);
+        let res = await fetch(`http://localhost:5000/prosignal/${symbol}`);
         let data = await res.json();
-
-        console.log("Signal:", data);
 
         let s = data.signal;
 
-        let signalEl = document.getElementById("signal");
+        let el = document.getElementById("signal");
+        el.innerText = s.type;
+        el.className = "";
 
-        signalEl.innerText = s.type || "NO SIGNAL";
-        signalEl.className = "";
+        if(s.type==="BUY") el.classList.add("buy");
+        if(s.type==="SELL") el.classList.add("sell");
 
-        if (s.type === "BUY") signalEl.classList.add("buy");
-        if (s.type === "SELL") signalEl.classList.add("sell");
+        document.getElementById("entry").innerText = "Entry: "+(s.entry||"-");
+        document.getElementById("sl").innerText = "SL: "+(s.sl||"-");
+        document.getElementById("tp").innerText = "TP: "+(s.tp||"-");
 
-        document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
-        document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
-        document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
-
-    } catch (err) {
-        console.error(err);
-        document.getElementById("signal").innerText = "ERROR";
-    }
-}
-// ==============================
-// 🔹 DRAW FVG
-// ==============================
-function drawFVG(data) {
-
-    for (let i = 2; i < data.c.length; i++) {
-
-        if (data.l[i] > data.h[i-2]) {
-            let line = chart.addLineSeries({ color: 'green' });
-
-            line.setData([
-                { time: data.t[i-2], value: data.h[i-2] },
-                { time: data.t[i], value: data.l[i] }
-            ]);
+        if(s.type==="BUY" || s.type==="SELL"){
+            new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play();
         }
 
-        if (data.h[i] < data.l[i-2]) {
-            let line = chart.addLineSeries({ color: 'red' });
-
-            line.setData([
-                { time: data.t[i-2], value: data.l[i-2] },
-                { time: data.t[i], value: data.h[i] }
-            ]);
-        }
-    }
+    },5000);
 }
 
 </script>
