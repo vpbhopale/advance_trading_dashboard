@@ -117,18 +117,28 @@ function searchStock() {
     });
 }
 
-// 🔹 FORMAT SYMBOL
 function formatSymbol(input) {
-    input = input.toUpperCase();
+    input = input.toUpperCase().trim();
 
+    // If already formatted (has exchange)
     if (input.includes(":")) return input;
 
+    // Indian indices
     if (input === "NIFTY") return "NSE:NIFTY";
     if (input === "BANKNIFTY") return "NSE:BANKNIFTY";
 
-    return "NSE:" + input;
-}
+    // Known Indian stocks list (expand this later)
+    const indianStocks = [
+        "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"
+    ];
 
+    if (indianStocks.includes(input)) {
+        return "NSE:" + input;
+    }
+
+    // Default → treat as US stock
+    return input;
+}
 // 🔹 LOAD DATA
 function load() {
     let raw = document.getElementById("symbol").value;
