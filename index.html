@@ -67,15 +67,21 @@ input, button {
 
 <script>
 
+// =======================
+// GLOBAL VARIABLES (FIRST)
+// =======================
 let currentTF = "15";
 let autoSignalInterval;
 
-let chart1 = LightweightCharts.createChart(document.getElementById('chart1'));
-let chart2 = LightweightCharts.createChart(document.getElementById('chart2'));
+// =======================
+// CREATE CHARTS
+// =======================
+const chart1 = LightweightCharts.createChart(document.getElementById('chart1'));
+const chart2 = LightweightCharts.createChart(document.getElementById('chart2'));
 
-let c1 = chart1.addSeries(LightweightCharts.CandlestickSeries, {});
-let c2 = chart2.addSeries(LightweightCharts.CandlestickSeries, {});
-
+// ✅ NEW API (IMPORTANT)
+const c1 = chart1.addSeries(LightweightCharts.CandlestickSeries, {});
+const c2 = chart2.addSeries(LightweightCharts.CandlestickSeries, {});
 
 // =======================
 // TIMEFRAME
@@ -90,30 +96,41 @@ function setTF(tf){
 // =======================
 async function load(){
 
-    let symbol = document.getElementById("symbol").value.toUpperCase();
+    try {
 
-    let res = await fetch(`http://localhost:5000/candles/${symbol}?tf=${currentTF}`);
-    let data = await res.json();
+        const symbol = document.getElementById("symbol").value.toUpperCase();
 
-    console.log("DATA:", data);
+        if(!symbol){
+            alert("Enter symbol");
+            return;
+        }
 
-    if (!data || !data.t || data.t.length === 0) {
-        alert("❌ No data");
-        return;
+        const res = await fetch(`http://localhost:5000/candles/${symbol}?tf=${currentTF}`);
+        const data = await res.json();
+
+        console.log("DATA:", data);
+
+        if (!data || !data.t || data.t.length === 0) {
+            alert("❌ No data from server");
+            return;
+        }
+
+        const formatted = data.t.map((time,i)=>({
+            time: time,
+            open: data.o[i],
+            high: data.h[i],
+            low: data.l[i],
+            close: data.c[i]
+        }));
+
+        c1.setData(formatted);
+        c2.setData(formatted);
+
+        startAutoSignal(symbol);
+
+    } catch(err){
+        console.error("LOAD ERROR:", err);
     }
-
-    let formatted = data.t.map((time,i)=>({
-        time: time,
-        open: data.o[i],
-        high: data.h[i],
-        low: data.l[i],
-        close: data.c[i]
-    }));
-
-    c1.setData(formatted);
-    c2.setData(formatted);
-
-    startAutoSignal(symbol);
 }
 
 // =======================
@@ -125,24 +142,36 @@ function startAutoSignal(symbol){
 
     autoSignalInterval = setInterval(async ()=>{
 
-        let res = await fetch(`http://localhost:5000/prosignal/${symbol}`);
-        let data = await res.json();
+        try {
 
-        let s = data.signal;
+            const res = await fetch(`http://localhost:5000/prosignal/${symbol}`);
+            const data = await res.json();
 
-        let el = document.getElementById("signal");
-        el.innerText = s.type;
-        el.className = "";
+            const s = data.signal;
 
-        if(s.type==="BUY") el.classList.add("buy");
-        if(s.type==="SELL") el.classList.add("sell");
+            const el = document.getElementById("signal");
+            el.innerText = s.type;
+            el.className = "";
 
-        document.getElementById("entry").innerText = "Entry: "+(s.entry||"-");
-        document.getElementById("sl").innerText = "SL: "+(s.sl||"-");
-        document.getElementById("tp").innerText = "TP: "+(s.tp||"-");
+            if(s.type==="BUY") el.classList.add("buy");
+            if(s.type==="SELL") el.classList.add("sell");
+
+            document.getElementById("entry").innerText = "Entry: "+(s.entry||"-");
+            document.getElementById("sl").innerText = "SL: "+(s.sl||"-");
+            document.getElementById("tp").innerText = "TP: "+(s.tp||"-");
+
+        } catch(err){
+            console.error("Signal error:", err);
+        }
 
     },10000);
 }
+
+// =======================
+// MAKE FUNCTIONS GLOBAL
+// =======================
+window.load = load;
+window.setTF = setTF;
 
 </script>
 
