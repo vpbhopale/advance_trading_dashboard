@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Trading Dashboard</title>
+
+<style>
+body { background:#0f172a; color:white; font-family:Arial; }
+.container { display:flex; }
+.main { flex:3; }
+.side { flex:1; padding:10px; }
+.card { background:#111827; padding:10px; margin:10px; border-radius:10px; }
+</style>
+
+</head>
+
+<body>
+
+<h2>📊 Trading Dashboard</h2>
+
+<input id="symbol" placeholder="AAPL or NSE:RELIANCE">
+<button onclick="load()">Load</button>
+
+<div class="container">
+
+<div class="main">
+<div id="chart"></div>
+</div>
+
+<div class="side">
+
+<div class="card">
+<h3>Signal</h3>
+<p id="signal">---</p>
+</div>
+
+<div class="card">
+<h3>Portfolio</h3>
+<ul id="portfolio"></ul>
+<button onclick="addStock()">Add</button>
+</div>
+
+</div>
+
+</div>
+
+<script src="https://s3.tradingview.com/tv.js"></script>
+
+<script>
+let portfolio = [];
+
+function load() {
+    let symbol = document.getElementById("symbol").value;
+
+    new TradingView.widget({
+        "container_id": "chart",
+        "symbol": symbol,
+        "interval": "15",
+        "theme": "dark",
+        "height": 500
+    });
+
+    fetch("http://localhost:5000/signal/" + symbol)
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("signal").innerText = data.signal;
+
+        if (data.signal === "BUY") alert("BUY SIGNAL 🚀");
+        if (data.signal === "SELL") alert("SELL SIGNAL ⚠️");
+    });
+}
+
+function addStock() {
+    let symbol = document.getElementById("symbol").value;
+    portfolio.push(symbol);
+    render();
+}
+
+function render() {
+    let list = document.getElementById("portfolio");
+    list.innerHTML = "";
+    portfolio.forEach(s => {
+        let li = document.createElement("li");
+        li.innerText = s;
+        list.appendChild(li);
+    });
+}
+</script>
+
+</body>
+</html>
