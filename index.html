@@ -1,187 +1,119 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Pro Trading Dashboard</title>
+<title>Custom Trading Dashboard</title>
+
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
 <style>
 body { background:#020617; color:white; font-family:sans-serif; }
-.top { padding:10px; display:flex; gap:10px; position:relative; }
+
 .container { display:flex; }
-.main { flex:3; }
+.chart { flex:3; height:600px; }
 .side { flex:1; padding:10px; }
 
 .card {
     background:#111827;
+    padding:10px;
     margin:10px;
-    padding:15px;
-    border-radius:12px;
-}
-
-#dropdown {
-    position:absolute;
-    top:40px;
-    width:250px;
-    background:#111827;
-    border-radius:8px;
-    max-height:200px;
-    overflow-y:auto;
-}
-
-.dropdown-item {
-    padding:8px;
-    cursor:pointer;
-}
-
-.dropdown-item:hover {
-    background:#1f2937;
+    border-radius:10px;
 }
 
 .buy { color:#22c55e; }
 .sell { color:#ef4444; }
 </style>
-
 </head>
 
 <body>
 
-<div class="top">
-<input id="symbol" placeholder="Search NIFTY / RELIANCE / TCS" onkeyup="searchStock()">
+<h2>📊 Custom Trading Dashboard</h2>
+
+<input id="symbol" placeholder="AAPL / NSE:RELIANCE">
 <button onclick="load()">Load</button>
-<div id="dropdown"></div>
-</div>
 
 <div class="container">
+    <div id="chart" class="chart"></div>
 
-<div class="main">
-<div id="chart"></div>
+    <div class="side">
+        <div class="card">
+            <h3>Signal</h3>
+            <p id="signal"></p>
+            <p id="entry"></p>
+            <p id="sl"></p>
+            <p id="tp"></p>
+        </div>
+    </div>
 </div>
-
-<div class="side">
-
-<div class="card">
-<h3>Trend</h3>
-<p id="trend">-</p>
-</div>
-
-<div class="card">
-<h3>Signal</h3>
-<p id="signal">-</p>
-<p id="entry"></p>
-<p id="sl"></p>
-<p id="tp"></p>
-</div>
-
-</div>
-
-</div>
-
-<script src="https://s3.tradingview.com/tv.js"></script>
 
 <script>
+let chart = LightweightCharts.createChart(document.getElementById('chart'), {
+    layout: { background: { color: '#020617' }, textColor: '#DDD' },
+    grid: { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } }
+});
 
-// 🔹 STOCK LIST
-const stocks = [
-    { name: "NIFTY 50", symbol: "NSE:NIFTY" },
-    { name: "BANK NIFTY", symbol: "NSE:BANKNIFTY" },
-    { name: "Reliance", symbol: "NSE:RELIANCE" },
-    { name: "TCS", symbol: "NSE:TCS" },
-    { name: "Infosys", symbol: "NSE:INFY" },
-    { name: "HDFC Bank", symbol: "NSE:HDFCBANK" },
-    { name: "ICICI Bank", symbol: "NSE:ICICIBANK" }
-];
+let candleSeries = chart.addCandlestickSeries();
 
-// 🔹 SEARCH DROPDOWN
-function searchStock() {
-    let input = document.getElementById("symbol").value.toLowerCase();
-    let dropdown = document.getElementById("dropdown");
-    dropdown.innerHTML = "";
+// 🔹 LOAD FUNCTION
+async function load() {
 
-    if (!input) return;
+    let symbol = document.getElementById("symbol").value;
 
-    let results = stocks.filter(s =>
-        s.name.toLowerCase().includes(input) ||
-        s.symbol.toLowerCase().includes(input)
-    );
+    // FETCH DATA
+    let res = await fetch("http://localhost:5000/prosignal/" + symbol);
+    let data = await res.json();
 
-    results.forEach(stock => {
-        let div = document.createElement("div");
-        div.className = "dropdown-item";
-        div.innerText = stock.name + " (" + stock.symbol + ")";
+    // FETCH RAW CANDLES
+    let candleRes = await fetch("http://localhost:5000/candles/" + symbol);
+    let candleData = await candleRes.json();
 
-        div.onclick = () => {
-            document.getElementById("symbol").value = stock.symbol;
-            dropdown.innerHTML = "";
-        };
+    // FORMAT DATA
+    let formatted = candleData.t.map((time, i) => ({
+        time: time,
+        open: candleData.o[i],
+        high: candleData.h[i],
+        low: candleData.l[i],
+        close: candleData.c[i]
+    }));
 
-        dropdown.appendChild(div);
-    });
+    candleSeries.setData(formatted);
+
+    // DRAW FVG
+    drawFVG(candleData);
+
+    // SHOW SIGNAL
+    let s = data.signal;
+
+    document.getElementById("signal").innerText = s.type;
+    document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
+    document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
+    document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
 }
 
-function formatSymbol(input) {
-    input = input.toUpperCase().trim();
+// 🔹 DRAW FVG ZONES
+function drawFVG(data) {
+    for (let i = 2; i < data.c.length; i++) {
 
-    // If already formatted (has exchange)
-    if (input.includes(":")) return input;
+        // Bullish FVG
+        if (data.l[i] > data.h[i-2]) {
+            let line = chart.addLineSeries({ color: 'green' });
 
-    // Indian indices
-    if (input === "NIFTY") return "NSE:NIFTY";
-    if (input === "BANKNIFTY") return "NSE:BANKNIFTY";
+            line.setData([
+                { time: data.t[i-2], value: data.h[i-2] },
+                { time: data.t[i], value: data.l[i] }
+            ]);
+        }
 
-    // Known Indian stocks list (expand this later)
-    const indianStocks = [
-        "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"
-    ];
+        // Bearish FVG
+        if (data.h[i] < data.l[i-2]) {
+            let line = chart.addLineSeries({ color: 'red' });
 
-    if (indianStocks.includes(input)) {
-        return "NSE:" + input;
+            line.setData([
+                { time: data.t[i-2], value: data.l[i-2] },
+                { time: data.t[i], value: data.h[i] }
+            ]);
+        }
     }
-
-    // Default → treat as US stock
-    return input;
 }
-// 🔹 LOAD DATA
-function load() {
-    let raw = document.getElementById("symbol").value;
-    let symbol = formatSymbol(raw);
-
-    document.getElementById("signal").innerText = "Loading...";
-
-    new TradingView.widget({
-        "container_id": "chart",
-        "symbol": symbol,
-        "interval": "15",
-        "theme": "dark",
-        "height": 600
-    });
-
-    fetch("http://localhost:5000/prosignal/" + symbol)
-    .then(res => res.json())
-    .then(data => {
-
-        document.getElementById("trend").innerText = data.trend;
-
-        let s = data.signal;
-        let signalEl = document.getElementById("signal");
-
-        signalEl.innerText = s.type;
-
-        signalEl.className = "";
-        if (s.type === "BUY") signalEl.classList.add("buy");
-        if (s.type === "SELL") signalEl.classList.add("sell");
-
-        document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
-        document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
-        document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
-
-        if (s.type === "BUY") alert("BUY SETUP 🚀");
-        if (s.type === "SELL") alert("SELL SETUP ⚠️");
-
-    })
-    .catch(err => {
-        document.getElementById("signal").innerText = "Error loading data";
-    });
-}
-
 </script>
 
 </body>
