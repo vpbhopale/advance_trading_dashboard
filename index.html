@@ -1,15 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Custom Trading Dashboard</title>
+<title>Pro Trading Dashboard</title>
 
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
 <style>
 body { background:#020617; color:white; font-family:sans-serif; }
 
+.top {
+    padding:10px;
+    display:flex;
+    gap:10px;
+    position:relative;
+}
+
+#dropdown {
+    position:absolute;
+    top:40px;
+    width:250px;
+    background:#111827;
+    border-radius:8px;
+    max-height:200px;
+    overflow-y:auto;
+    z-index:1000;
+}
+
+.dropdown-item {
+    padding:8px;
+    cursor:pointer;
+}
+
+.dropdown-item:hover {
+    background:#1f2937;
+}
+
 .container { display:flex; }
+
 .chart { flex:3; height:600px; }
+
 .side { flex:1; padding:10px; }
 
 .card {
@@ -26,10 +55,13 @@ body { background:#020617; color:white; font-family:sans-serif; }
 
 <body>
 
-<h2>📊 Custom Trading Dashboard</h2>
+<h2>📊 Pro Trading Dashboard</h2>
 
-<input id="symbol" placeholder="AAPL / NSE:RELIANCE">
-<button onclick="load()">Load</button>
+<div class="top">
+    <input id="symbol" placeholder="Search stock..." onkeyup="searchStock()">
+    <button onclick="load()">Load</button>
+    <div id="dropdown"></div>
+</div>
 
 <div class="container">
     <div id="chart" class="chart"></div>
@@ -46,6 +78,10 @@ body { background:#020617; color:white; font-family:sans-serif; }
 </div>
 
 <script>
+
+// ==============================
+// 🔹 CHART SETUP
+// ==============================
 let chart = LightweightCharts.createChart(document.getElementById('chart'), {
     layout: { background: { color: '#020617' }, textColor: '#DDD' },
     grid: { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } }
@@ -53,20 +89,92 @@ let chart = LightweightCharts.createChart(document.getElementById('chart'), {
 
 let candleSeries = chart.addCandlestickSeries();
 
-// 🔹 LOAD FUNCTION
+// ==============================
+// 🔹 STOCK LIST
+// ==============================
+const stocks = [
+    { name: "NIFTY 50", symbol: "NSE:NIFTY" },
+    { name: "BANK NIFTY", symbol: "NSE:BANKNIFTY" },
+    { name: "Reliance", symbol: "NSE:RELIANCE" },
+    { name: "TCS", symbol: "NSE:TCS" },
+    { name: "Infosys", symbol: "NSE:INFY" },
+
+    { name: "Apple", symbol: "AAPL" },
+    { name: "Tesla", symbol: "TSLA" },
+    { name: "Microsoft", symbol: "MSFT" }
+];
+
+// ==============================
+// 🔹 SEARCH
+// ==============================
+function searchStock() {
+    let input = document.getElementById("symbol").value.toLowerCase();
+    let dropdown = document.getElementById("dropdown");
+
+    dropdown.innerHTML = "";
+
+    if (!input) return;
+
+    let results = stocks.filter(s =>
+        s.name.toLowerCase().includes(input) ||
+        s.symbol.toLowerCase().includes(input)
+    );
+
+    results.forEach(stock => {
+        let div = document.createElement("div");
+        div.className = "dropdown-item";
+        div.innerText = stock.name + " (" + stock.symbol + ")";
+
+        div.onclick = () => {
+            document.getElementById("symbol").value = stock.symbol;
+            dropdown.innerHTML = "";
+        };
+
+        dropdown.appendChild(div);
+    });
+}
+
+// ==============================
+// 🔹 SYMBOL FORMAT
+// ==============================
+function formatSymbol(input) {
+    input = input.toUpperCase().trim();
+
+    if (input.includes(":")) return input;
+
+    if (input === "NIFTY") return "NSE:NIFTY";
+    if (input === "BANKNIFTY") return "NSE:BANKNIFTY";
+
+    const indianStocks = ["RELIANCE","TCS","INFY"];
+
+    if (indianStocks.includes(input)) {
+        return "NSE:" + input;
+    }
+
+    return input;
+}
+
+// ==============================
+// 🔹 LOAD DATA
+// ==============================
 async function load() {
 
-    let symbol = document.getElementById("symbol").value;
+    let raw = document.getElementById("symbol").value;
+    let symbol = formatSymbol(raw);
 
-    // FETCH DATA
-    let res = await fetch("http://localhost:5000/prosignal/" + symbol);
-    let data = await res.json();
+    if (!symbol) return;
 
-    // FETCH RAW CANDLES
+    document.getElementById("signal").innerText = "Loading...";
+
+    // 🔹 Fetch candles
     let candleRes = await fetch("http://localhost:5000/candles/" + symbol);
     let candleData = await candleRes.json();
 
-    // FORMAT DATA
+    if (!candleData.c) {
+        alert("No data found");
+        return;
+    }
+
     let formatted = candleData.t.map((time, i) => ({
         time: time,
         open: candleData.o[i],
@@ -77,23 +185,34 @@ async function load() {
 
     candleSeries.setData(formatted);
 
-    // DRAW FVG
     drawFVG(candleData);
 
-    // SHOW SIGNAL
+    // 🔹 Fetch signal
+    let res = await fetch("http://localhost:5000/prosignal/" + symbol);
+    let data = await res.json();
+
     let s = data.signal;
 
-    document.getElementById("signal").innerText = s.type;
+    let signalEl = document.getElementById("signal");
+
+    signalEl.innerText = s.type;
+    signalEl.className = "";
+
+    if (s.type === "BUY") signalEl.classList.add("buy");
+    if (s.type === "SELL") signalEl.classList.add("sell");
+
     document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
     document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
     document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
 }
 
-// 🔹 DRAW FVG ZONES
+// ==============================
+// 🔹 DRAW FVG
+// ==============================
 function drawFVG(data) {
+
     for (let i = 2; i < data.c.length; i++) {
 
-        // Bullish FVG
         if (data.l[i] > data.h[i-2]) {
             let line = chart.addLineSeries({ color: 'green' });
 
@@ -103,7 +222,6 @@ function drawFVG(data) {
             ]);
         }
 
-        // Bearish FVG
         if (data.h[i] < data.l[i-2]) {
             let line = chart.addLineSeries({ color: 'red' });
 
@@ -114,6 +232,7 @@ function drawFVG(data) {
         }
     }
 }
+
 </script>
 
 </body>
