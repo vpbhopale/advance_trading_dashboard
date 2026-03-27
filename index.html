@@ -5,16 +5,37 @@
 
 <style>
 body { background:#020617; color:white; font-family:sans-serif; }
-.top { padding:10px; background:#020617; display:flex; gap:10px; }
+.top { padding:10px; display:flex; gap:10px; position:relative; }
 .container { display:flex; }
 .main { flex:3; }
 .side { flex:1; padding:10px; }
+
 .card {
     background:#111827;
     margin:10px;
     padding:15px;
     border-radius:12px;
 }
+
+#dropdown {
+    position:absolute;
+    top:40px;
+    width:250px;
+    background:#111827;
+    border-radius:8px;
+    max-height:200px;
+    overflow-y:auto;
+}
+
+.dropdown-item {
+    padding:8px;
+    cursor:pointer;
+}
+
+.dropdown-item:hover {
+    background:#1f2937;
+}
+
 .buy { color:#22c55e; }
 .sell { color:#ef4444; }
 </style>
@@ -24,8 +45,9 @@ body { background:#020617; color:white; font-family:sans-serif; }
 <body>
 
 <div class="top">
-<input id="symbol" placeholder="NSE:RELIANCE">
+<input id="symbol" placeholder="Search NIFTY / RELIANCE / TCS" onkeyup="searchStock()">
 <button onclick="load()">Load</button>
+<div id="dropdown"></div>
 </div>
 
 <div class="container">
@@ -38,12 +60,12 @@ body { background:#020617; color:white; font-family:sans-serif; }
 
 <div class="card">
 <h3>Trend</h3>
-<p id="trend"></p>
+<p id="trend">-</p>
 </div>
 
 <div class="card">
 <h3>Signal</h3>
-<p id="signal"></p>
+<p id="signal">-</p>
 <p id="entry"></p>
 <p id="sl"></p>
 <p id="tp"></p>
@@ -56,8 +78,63 @@ body { background:#020617; color:white; font-family:sans-serif; }
 <script src="https://s3.tradingview.com/tv.js"></script>
 
 <script>
+
+// 🔹 STOCK LIST
+const stocks = [
+    { name: "NIFTY 50", symbol: "NSE:NIFTY" },
+    { name: "BANK NIFTY", symbol: "NSE:BANKNIFTY" },
+    { name: "Reliance", symbol: "NSE:RELIANCE" },
+    { name: "TCS", symbol: "NSE:TCS" },
+    { name: "Infosys", symbol: "NSE:INFY" },
+    { name: "HDFC Bank", symbol: "NSE:HDFCBANK" },
+    { name: "ICICI Bank", symbol: "NSE:ICICIBANK" }
+];
+
+// 🔹 SEARCH DROPDOWN
+function searchStock() {
+    let input = document.getElementById("symbol").value.toLowerCase();
+    let dropdown = document.getElementById("dropdown");
+    dropdown.innerHTML = "";
+
+    if (!input) return;
+
+    let results = stocks.filter(s =>
+        s.name.toLowerCase().includes(input) ||
+        s.symbol.toLowerCase().includes(input)
+    );
+
+    results.forEach(stock => {
+        let div = document.createElement("div");
+        div.className = "dropdown-item";
+        div.innerText = stock.name + " (" + stock.symbol + ")";
+
+        div.onclick = () => {
+            document.getElementById("symbol").value = stock.symbol;
+            dropdown.innerHTML = "";
+        };
+
+        dropdown.appendChild(div);
+    });
+}
+
+// 🔹 FORMAT SYMBOL
+function formatSymbol(input) {
+    input = input.toUpperCase();
+
+    if (input.includes(":")) return input;
+
+    if (input === "NIFTY") return "NSE:NIFTY";
+    if (input === "BANKNIFTY") return "NSE:BANKNIFTY";
+
+    return "NSE:" + input;
+}
+
+// 🔹 LOAD DATA
 function load() {
-    let symbol = document.getElementById("symbol").value;
+    let raw = document.getElementById("symbol").value;
+    let symbol = formatSymbol(raw);
+
+    document.getElementById("signal").innerText = "Loading...";
 
     new TradingView.widget({
         "container_id": "chart",
@@ -74,16 +151,27 @@ function load() {
         document.getElementById("trend").innerText = data.trend;
 
         let s = data.signal;
+        let signalEl = document.getElementById("signal");
 
-        document.getElementById("signal").innerText = s.type;
+        signalEl.innerText = s.type;
+
+        signalEl.className = "";
+        if (s.type === "BUY") signalEl.classList.add("buy");
+        if (s.type === "SELL") signalEl.classList.add("sell");
+
         document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
         document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
         document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
 
-        if (s.type === "BUY") alert("BUY SETUP READY 🚀");
+        if (s.type === "BUY") alert("BUY SETUP 🚀");
         if (s.type === "SELL") alert("SELL SETUP ⚠️");
+
+    })
+    .catch(err => {
+        document.getElementById("signal").innerText = "Error loading data";
     });
 }
+
 </script>
 
 </body>
