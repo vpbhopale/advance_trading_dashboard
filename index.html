@@ -96,9 +96,10 @@ async function load(){
 
     console.log("DATA:", data);
 
-    if (!data || data.error || !data.t) {
-        alert("❌ No data. Try AAPL / RELIANCE / NIFTY");
-        return;
+    if (!data || !data.t || data.t.length === 0) {
+    alert("❌ No data returned from server");
+    return;
+}
     }
 
     let formatted = data.t.map((time,i)=>({
