@@ -67,14 +67,15 @@ input, button {
 
 <script>
 
+let currentTF = "15";
+let autoSignalInterval;
+
 let chart1 = LightweightCharts.createChart(document.getElementById('chart1'));
 let chart2 = LightweightCharts.createChart(document.getElementById('chart2'));
 
-let c1 = chart1.addCandlestickSeries();
-let c2 = chart2.addCandlestickSeries();
+let c1 = chart1.addSeries(LightweightCharts.CandlestickSeries, {});
+let c2 = chart2.addSeries(LightweightCharts.CandlestickSeries, {});
 
-let currentTF = "15";
-let autoSignalInterval;
 
 // =======================
 // TIMEFRAME
