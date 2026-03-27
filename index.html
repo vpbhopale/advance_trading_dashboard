@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Pro Trading Dashboard MAX</title>
+<title>Pro Trading Dashboard (Yahoo Finance)</title>
 
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
@@ -40,10 +40,10 @@ input, button {
 
 <body>
 
-<h2>🚀 Pro Trading Dashboard MAX</h2>
+<h2>📊 Trading Dashboard (Yahoo Finance)</h2>
 
 <div class="top">
-    <input id="symbol" placeholder="Search (AAPL / RELIANCE.NS)">
+    <input id="symbol" placeholder="AAPL / RELIANCE / NIFTY">
     <button onclick="setTF('5')">5m</button>
     <button onclick="setTF('15')">15m</button>
     <button onclick="setTF('60')">1H</button>
@@ -67,8 +67,6 @@ input, button {
 
 <script>
 
-let API_KEY = "d7368j1r01qn7f07oqp0d7368j1r01qn7f07oqpg";
-
 let chart1 = LightweightCharts.createChart(document.getElementById('chart1'));
 let chart2 = LightweightCharts.createChart(document.getElementById('chart2'));
 
@@ -76,8 +74,11 @@ let c1 = chart1.addCandlestickSeries();
 let c2 = chart2.addCandlestickSeries();
 
 let currentTF = "15";
-let socket, autoSignalInterval;
+let autoSignalInterval;
 
+// =======================
+// TIMEFRAME
+// =======================
 function setTF(tf){
     currentTF = tf;
     load();
@@ -88,10 +89,17 @@ function setTF(tf){
 // =======================
 async function load(){
 
-    let symbol = document.getElementById("symbol").value;
+    let symbol = document.getElementById("symbol").value.toUpperCase();
 
     let res = await fetch(`http://localhost:5000/candles/${symbol}?tf=${currentTF}`);
     let data = await res.json();
+
+    console.log("DATA:", data);
+
+    if (!data || data.error || !data.t) {
+        alert("❌ No data. Try AAPL / RELIANCE / NIFTY");
+        return;
+    }
 
     let formatted = data.t.map((time,i)=>({
         time: time,
@@ -104,52 +112,7 @@ async function load(){
     c1.setData(formatted);
     c2.setData(formatted);
 
-    startLive(symbol);
     startAutoSignal(symbol);
-}
-
-// =======================
-// LIVE STREAM
-// =======================
-function startLive(symbol){
-
-    if(socket) socket.close();
-
-    socket = new WebSocket(`wss://ws.finnhub.io?token=${API_KEY}`);
-
-    socket.onopen = () => {
-        socket.send(JSON.stringify({ type:'subscribe', symbol }));
-    };
-
-    let currentCandle=null;
-
-    socket.onmessage = (event)=>{
-        let msg = JSON.parse(event.data);
-
-        if(msg.type==="trade"){
-            let price = msg.data[0].p;
-            let time = Math.floor(msg.data[0].t/1000);
-
-            let candleTime = Math.floor(time/60)*60;
-
-            if(!currentCandle || currentCandle.time!==candleTime){
-                currentCandle = {
-                    time:candleTime,
-                    open:price,
-                    high:price,
-                    low:price,
-                    close:price
-                };
-            }else{
-                currentCandle.high = Math.max(currentCandle.high,price);
-                currentCandle.low = Math.min(currentCandle.low,price);
-                currentCandle.close = price;
-            }
-
-            c1.update(currentCandle);
-            c2.update(currentCandle);
-        }
-    };
 }
 
 // =======================
@@ -177,11 +140,7 @@ function startAutoSignal(symbol){
         document.getElementById("sl").innerText = "SL: "+(s.sl||"-");
         document.getElementById("tp").innerText = "TP: "+(s.tp||"-");
 
-        if(s.type==="BUY" || s.type==="SELL"){
-            new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play();
-        }
-
-    },5000);
+    },10000); // slower = stable
 }
 
 </script>
