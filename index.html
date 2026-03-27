@@ -164,48 +164,66 @@ async function load() {
 
     if (!symbol) return;
 
+    console.log("Loading:", symbol);
+
     document.getElementById("signal").innerText = "Loading...";
 
-    // 🔹 Fetch candles
-    let candleRes = await fetch("http://localhost:5000/candles/" + symbol);
-    let candleData = await candleRes.json();
+    try {
 
-    if (!candleData.c) {
-        alert("No data found");
-        return;
+        // 🔹 Fetch candles
+        let candleRes = await fetch("http://localhost:5000/candles/" + symbol);
+        let candleData = await candleRes.json();
+
+        console.log("Candles:", candleData);
+
+        if (!candleData || !candleData.c) {
+            alert("❌ No candle data (try AAPL)");
+            return;
+        }
+
+        // 🔥 FIX TIME FORMAT (VERY IMPORTANT)
+        let formatted = candleData.t.map((time, i) => ({
+            time: Math.floor(time), // ensure correct format
+            open: candleData.o[i],
+            high: candleData.h[i],
+            low: candleData.l[i],
+            close: candleData.c[i]
+        }));
+
+        // 🔥 CLEAR OLD DATA
+        chart.removeSeries(candleSeries);
+        candleSeries = chart.addCandlestickSeries();
+
+        candleSeries.setData(formatted);
+
+        // 🔹 Draw FVG
+        drawFVG(candleData);
+
+        // 🔹 Fetch signal
+        let res = await fetch("http://localhost:5000/prosignal/" + symbol);
+        let data = await res.json();
+
+        console.log("Signal:", data);
+
+        let s = data.signal;
+
+        let signalEl = document.getElementById("signal");
+
+        signalEl.innerText = s.type || "NO SIGNAL";
+        signalEl.className = "";
+
+        if (s.type === "BUY") signalEl.classList.add("buy");
+        if (s.type === "SELL") signalEl.classList.add("sell");
+
+        document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
+        document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
+        document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById("signal").innerText = "ERROR";
     }
-
-    let formatted = candleData.t.map((time, i) => ({
-        time: time,
-        open: candleData.o[i],
-        high: candleData.h[i],
-        low: candleData.l[i],
-        close: candleData.c[i]
-    }));
-
-    candleSeries.setData(formatted);
-
-    drawFVG(candleData);
-
-    // 🔹 Fetch signal
-    let res = await fetch("http://localhost:5000/prosignal/" + symbol);
-    let data = await res.json();
-
-    let s = data.signal;
-
-    let signalEl = document.getElementById("signal");
-
-    signalEl.innerText = s.type;
-    signalEl.className = "";
-
-    if (s.type === "BUY") signalEl.classList.add("buy");
-    if (s.type === "SELL") signalEl.classList.add("sell");
-
-    document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
-    document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
-    document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
 }
-
 // ==============================
 // 🔹 DRAW FVG
 // ==============================
