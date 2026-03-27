@@ -1,24 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Trading Dashboard</title>
+<title>Pro Trading Dashboard</title>
 
 <style>
-body { background:#0f172a; color:white; font-family:Arial; }
+body { background:#020617; color:white; font-family:sans-serif; }
+.top { padding:10px; background:#020617; display:flex; gap:10px; }
 .container { display:flex; }
 .main { flex:3; }
 .side { flex:1; padding:10px; }
-.card { background:#111827; padding:10px; margin:10px; border-radius:10px; }
+.card {
+    background:#111827;
+    margin:10px;
+    padding:15px;
+    border-radius:12px;
+}
+.buy { color:#22c55e; }
+.sell { color:#ef4444; }
 </style>
 
 </head>
 
 <body>
 
-<h2>📊 Trading Dashboard</h2>
-
-<input id="symbol" placeholder="AAPL or NSE:RELIANCE">
+<div class="top">
+<input id="symbol" placeholder="NSE:RELIANCE">
 <button onclick="load()">Load</button>
+</div>
 
 <div class="container">
 
@@ -29,14 +37,16 @@ body { background:#0f172a; color:white; font-family:Arial; }
 <div class="side">
 
 <div class="card">
-<h3>Signal</h3>
-<p id="signal">---</p>
+<h3>Trend</h3>
+<p id="trend"></p>
 </div>
 
 <div class="card">
-<h3>Portfolio</h3>
-<ul id="portfolio"></ul>
-<button onclick="addStock()">Add</button>
+<h3>Signal</h3>
+<p id="signal"></p>
+<p id="entry"></p>
+<p id="sl"></p>
+<p id="tp"></p>
 </div>
 
 </div>
@@ -46,8 +56,6 @@ body { background:#0f172a; color:white; font-family:Arial; }
 <script src="https://s3.tradingview.com/tv.js"></script>
 
 <script>
-let portfolio = [];
-
 function load() {
     let symbol = document.getElementById("symbol").value;
 
@@ -56,32 +64,24 @@ function load() {
         "symbol": symbol,
         "interval": "15",
         "theme": "dark",
-        "height": 500
+        "height": 600
     });
 
-    fetch("http://localhost:5000/signal/" + symbol)
+    fetch("http://localhost:5000/prosignal/" + symbol)
     .then(res => res.json())
     .then(data => {
-        document.getElementById("signal").innerText = data.signal;
 
-        if (data.signal === "BUY") alert("BUY SIGNAL 🚀");
-        if (data.signal === "SELL") alert("SELL SIGNAL ⚠️");
-    });
-}
+        document.getElementById("trend").innerText = data.trend;
 
-function addStock() {
-    let symbol = document.getElementById("symbol").value;
-    portfolio.push(symbol);
-    render();
-}
+        let s = data.signal;
 
-function render() {
-    let list = document.getElementById("portfolio");
-    list.innerHTML = "";
-    portfolio.forEach(s => {
-        let li = document.createElement("li");
-        li.innerText = s;
-        list.appendChild(li);
+        document.getElementById("signal").innerText = s.type;
+        document.getElementById("entry").innerText = "Entry: " + (s.entry || "-");
+        document.getElementById("sl").innerText = "SL: " + (s.sl || "-");
+        document.getElementById("tp").innerText = "TP: " + (s.tp || "-");
+
+        if (s.type === "BUY") alert("BUY SETUP READY 🚀");
+        if (s.type === "SELL") alert("SELL SETUP ⚠️");
     });
 }
 </script>
